@@ -26,7 +26,7 @@ find "$tmp" -type f | while read -r f; do
         *.java) dest=src/gunlab/java/gunlab ;;
         train_mlp.py) dest=examples ;;
         *.py) dest=src/gunlab ;;
-        README.md | pyproject.toml | gunlab.example.toml | .gitignore | update.sh) dest=. ;;
+        README.md | STUDENTS.md | pyproject.toml | gunlab.example.toml | .gitignore | update.sh) dest=. ;;
         *) echo "skipped $name"; continue ;;
     esac
     mkdir -p "$dest"
