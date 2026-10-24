@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+dist/
+gunlab.toml
+data/
+results/
+submissions/
+files.zip

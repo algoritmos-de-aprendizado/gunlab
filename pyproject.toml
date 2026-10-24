@@ -1,0 +1,17 @@
+[project]
+name = "gunlab"
+version = "0.1.0"
+description = "Robocode neural-gun dataset generator, offline leaderboard and live arena"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.26"]
+
+[project.scripts]
+gunlab = "gunlab.cli:main"
+
+[tool.poetry]
+packages = [{ include = "gunlab", from = "src" }]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,39 @@
+[robocode]
+home = "~/robocode"
+# launcher = ["sh", "/home/teacher/robocode/robocode.sh"]
+quota_bytes = 100000000
+
+[battle]
+width = 800
+height = 600
+rounds = 35
+
+[live]
+rounds = 5
+tps = 50
+
+[board]
+bins = 31
+
+[data]
+dir = "data"
+battles_per_opponent = 1
+# Keep every real-bullet wave and one virtual wave in this many.
+virtual_stride = 4
+
+# Robot names: "package.Class version" (JAR file: package.Class_version.jar), or "package.Class" for class files.
+[tiers]
+# The sample bots plus about 20 RoboRumble bots spread evenly over the ranking.
+train = ["sample.Walls", "sample.RamFire", "sample.TrackFire"]
+# About 6 mid-ranked bots.
+validation = []
+# Hidden top-ranked bots; keep these names out of the copies students receive.
+test = []
+# Bots tested as arena opponents (see the README).
+candidates = []
+
+[arena]
+submissions = "submissions"
+results = "results"
+# Bots that do not adapt to the gun (see the README); keep these names private as well.
+opponents = ["sample.Walls", "sample.RamFire", "sample.TrackFire"]
