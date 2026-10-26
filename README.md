@@ -42,42 +42,66 @@ The enemy is 36 px wide, so a bullet aimed at a predicted GF hits when |predicte
 
 ## Requirements
 
-- Python ≥ 3.11 and Poetry ≥ 2.0.
-- For `setup`, `generate`, `arena` and `watch`: classic Robocode, and a Java Development Kit (JDK) supported by that Robocode release with `javac` on the `PATH`. `score` needs neither.
+- Python ≥ 3.11 and Poetry ≥ 2.0. This is all `score` and training need.
+- `setup`, `generate`, `arena`, `watch` and `bracket` also need a Java Development Kit (JDK) and classic Robocode, installed as below.
+
+## Installing Java and Robocode
+
+1. **JDK.** Version 21 is tested; 17 works too. On Debian or Ubuntu:
+   ```bash
+   sudo apt install openjdk-21-jdk
+   java -version
+   javac -version
+   ```
+   Both commands must answer; `javac: command not found` means only the runtime is installed. A `javac` older than `java` is fine. On another distribution, install its OpenJDK package that provides `javac`.
+2. **Robocode.** Classic Robocode, not Tank Royale. Version 1.11.1 is tested:
+   ```bash
+   cd ~
+   wget https://github.com/robo-code/robocode/releases/download/v1.11.1/robocode-1.11.1-setup.jar
+   java -jar robocode-1.11.1-setup.jar
+   ```
+   If `wget` fails, download the `…-setup.jar` file from the Assets of https://github.com/robo-code/robocode/releases. When the installer asks for a folder, choose `~/robocode`, which is the default `home` in `gunlab.toml`; any other folder works if `home` is set to it. Check the installation:
+   ```bash
+   ls ~/robocode/libs/robocode.jar ~/robocode/robocode.sh ~/robocode/robots/sample/Walls.class
+   ```
+3. **Compile gunlab's robots into Robocode.** Go back to your project, the folder that contains `gunlab.toml` (`gunlab` for the instructor, `my-gun` for students), and run `setup` there:
+   ```bash
+   cd path/to/your/project
+   poetry run gunlab setup
+   ```
+   Run it again after reinstalling Robocode, after changing a `.java` file, and after adding opponent JARs.
 
 ## Installation
 
 Instructor:
 
 ```bash
-git clone https://<course-host>/gunlab.git
+git clone <repository URL> gunlab
 cd gunlab
 poetry install
 cp gunlab.example.toml gunlab.toml
 ```
 
-Set `[robocode] home` in `gunlab.toml`, then:
+Set `[robocode] home` in `gunlab.toml` if Robocode is not in `~/robocode`, install Java and Robocode as above, then:
 
 ```bash
 poetry run gunlab setup
 ```
+
+Opponent JARs and tiers come next; see the instructor workflow below.
 
 Students, in their own project:
 
 ```bash
 poetry new my-gun
 cd my-gun
-poetry add git+https://<course-host>/gunlab.git
+poetry add git+https://github.com/algoritmos-de-aprendizado/gunlab.git
 poetry run gunlab --help
 ```
 
-From a built wheel instead (`poetry build` in the gunlab repository):
+If `poetry add` reports that the project's Python requirement is incompatible, set `requires-python = ">=3.11"` in the project's `pyproject.toml` and run it again.
 
-```bash
-poetry add ../gunlab-0.1.0-py3-none-any.whl
-```
-
-Students who want to run `watch` locally also need a `gunlab.toml` with `[robocode] home` and must run `poetry run gunlab setup` once.
+Students who want to run `watch` locally also need Java and Robocode (above), a `gunlab.toml` with `[robocode] home`, and one `poetry run gunlab setup`.
 
 ## Configuration
 
@@ -99,7 +123,7 @@ The instructor's `gunlab.toml` lists the hidden test opponents and is excluded b
 
 ## Instructor workflow
 
-1. Download the opponent JARs into `<home>/robots/`. Names and download links are in the RoboWiki page RoboRumble/Participants; the 1v1 ranking is on LiteRumble (`Rankings?game=roborumble`). Share CSV files, not JARs, since bot licenses vary.
+1. Download the opponent JARs into `<home>/robots/`, following [Getting opponent JARs](#getting-opponent-jars) below. Share CSV files, not JARs, since bot licenses vary.
 2. Choose the tiers. The split is by opponent, so validation and test measure generalization to bots the model never saw:
    - **train:** the sample bots plus about 20 bots spread evenly over the ranking. Several kinds of movement matter more than many rows from a few bots.
    - **validation:** about 6 mid-ranked bots, used by students for model selection.
@@ -127,12 +151,59 @@ The instructor's `gunlab.toml` lists the hidden test opponents and is excluded b
    - Showcase against the top bots: `poetry run gunlab arena --tier test`.
    - Single match: `poetry run gunlab watch submissions/alice.txt "package.Class version"`.
    - Duel between two students: `poetry run gunlab watch submissions/alice.txt submissions/bob.txt`.
+   - Knockout between students, live:
+     ```bash
+     poetry run gunlab bracket --seed-from results/<official arena board>.csv
+     ```
+     The top 8 entries are seeded by that board. In each duel the higher hit rate wins; bullet damage breaks ties, then the seed. When the number of entries is not a power of two, the top seeds skip the first round.
 
 Boards and per-battle logs are written to `results/`.
 
 ### Updating gunlab
 
 Save the downloaded update in the project root, either `files.zip` or a single `.py` / `.java` file, and run `sh update.sh`. The script moves every file into the repository layout and never touches `gunlab.toml`. Run `poetry run gunlab setup` afterwards when a `.java` file changed.
+
+### Getting opponent JARs
+
+Run these from the Robocode folder; they work in bash and fish.
+
+1. Save the participant list (names and download links) and the current 1v1 ranking:
+   ```bash
+   cd ~/robocode
+   curl -sL https://robowiki.net/wiki/RoboRumble/Participants \
+     | sed 's/<[^>]*>//g' \
+     | grep -E '^[A-Za-z0-9_.]+ [^,]+,https?://' \
+     | sed 's/&amp;/\&/g' > participants.txt
+   curl -sL 'https://literumble.appspot.com/Rankings?game=roborumble' \
+     | grep -oE 'BotDetails\?game=roborumble&(amp;)?name=[^"&]+' \
+     | sed -E 's/.*name=//; s/%20|\+/ /g' \
+     | awk '!seen[$0]++' > ranking.txt
+   wc -l participants.txt ranking.txt
+   ```
+   Both files should have about a thousand lines or more. `ranking.txt` lists the bots in rank order, one `package.Class version` per line.
+2. Pick bots by rank. For example, every 60th bot from rank 30 for training:
+   ```bash
+   awk 'NR % 60 == 30' ranking.txt > picked.txt
+   ```
+   Other picks follow the same pattern, for example `awk 'NR == 160 || NR == 320' ranking.txt`.
+3. Download the picked bots and keep only real JAR files:
+   ```bash
+   sed 's/$/,/' picked.txt > patterns.txt
+   grep -F -f patterns.txt participants.txt \
+     | awk -F'[ ,]' '{
+         jar = $1 "_" $2 ".jar"; url = substr($0, index($0, ",") + 1)
+         printf "curl -sL --max-time 60 -o \"robots/%s\" \"%s\"; if file \"robots/%s\" | grep -qE \"Java archive|Zip archive\"; then echo \"ok %s %s\"; else rm -f \"robots/%s\"; echo \"FAILED %s %s\"; fi\n", jar, url, jar, $1, $2, jar, $1, $2
+       }' > download.sh
+   sh download.sh | tee download.log
+   ```
+   - Each `ok` line gives a robot name to copy into a tier of `gunlab.toml`.
+   - `FAILED` bots have dead links; pick a neighbor in the ranking instead.
+   - Leave out rumble copies of the bundled sample bots, such as `sample.MyFirstRobot 1.0`; they clash with the originals.
+4. Go back to the gunlab folder and run `setup`; it reports any tier name that does not match a JAR:
+   ```bash
+   cd path/to/gunlab
+   poetry run gunlab setup
+   ```
 
 ## Student workflow
 
@@ -259,6 +330,7 @@ All commands accept `--config PATH` before the command name, for example `gunlab
 | `gunlab score [WEIGHTS…] [--tier T \| --data CSV] [--all-waves] [--by hit\|accuracy\|mse]` | Offline board; default: every file in `submissions/`, real-bullet waves of `data/validation.csv`, ranked by hit |
 | `gunlab arena [WEIGHTS…] [--headless] [--rounds N] [--tps N] [--tier T]` | Arena board ranked by hit rate, live by default; `--tier` plays that tier instead of `[arena] opponents` |
 | `gunlab watch WEIGHTS OPPONENT [--rounds N] [--tps N]` | One live battle against a robot name or a second weights file |
+| `gunlab bracket [WEIGHTS…] [--top N] [--seed-from CSV] [--headless] [--rounds N] [--tps N]` | Knockout duels between submissions, live by default; seeds from the given board CSV (default: the latest arena board) |
 
 ## Troubleshooting
 

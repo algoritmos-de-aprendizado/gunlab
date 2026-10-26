@@ -136,6 +136,72 @@ def cmd_watch(cfg: Config, args: argparse.Namespace) -> None:
     print(format_table(["robot", "hits", "bullet damage", "score"], rows))
 
 
+def cmd_bracket(cfg: Config, args: argparse.Namespace) -> None:
+    """Knockout duels between submissions; the higher hit rate wins, bullet damage breaks ties, then the seed."""
+    seeds = _seeded(_weights(cfg, args.weights), args.seed_from or _latest_board(cfg.results_dir))
+    if args.top:
+        seeds = seeds[: args.top]
+    if len(seeds) < 2:
+        raise RuntimeError("a bracket needs at least two entries")
+    rc = Robocode(cfg)
+    entries = rc.install_entries(seeds)
+    live = not args.headless
+    rounds = args.rounds or (cfg.live_rounds if live else cfg.rounds)
+    stamp = f"{datetime.now():%Y%m%d_%H%M%S}"
+    cfg.results_dir.mkdir(parents=True, exist_ok=True)
+    played: list[str] = []
+    alive = list(seeds)
+    with (cfg.results_dir / f"bracket_{stamp}.csv").open("w", newline="", encoding="utf-8") as f:
+        log = csv.writer(f)
+        log.writerow(["stage", "entry_a", "entry_b", "hit_rate_a", "hit_rate_b", "damage_a", "damage_b", "winner"])
+        while len(alive) > 1:
+            size = 1 << (len(alive) - 1).bit_length()
+            stage = "final" if size == 2 else f"round of {size}"
+            byes = size - len(alive)
+            advancing, rest = alive[:byes], alive[byes:]
+            for a, b in [(rest[i], rest[-1 - i]) for i in range(len(rest) // 2)]:
+                if live:
+                    os.system("cls" if os.name == "nt" else "clear")
+                print(f"{stage}: {a.stem} vs {b.stem}", *played, sep="\n", end="\n\n", flush=True)
+                for robot in (entries[a], entries[b]):
+                    rc.clear_stats(robot)
+                results = rc.run_battle([entries[a], entries[b]], rounds, live, args.tps)
+                (rate_a, dmg_a), (rate_b, dmg_b) = (_duel_side(rc, results, entries[p]) for p in (a, b))
+                winner = a if (rate_a, dmg_a) >= (rate_b, dmg_b) else b
+                advancing.append(winner)
+                played.append(
+                    f"{stage}: {a.stem} {rate_a:.1%} ({dmg_a:.0f}) vs {b.stem} {rate_b:.1%} ({dmg_b:.0f}) -> {winner.stem}"
+                )
+                log.writerow([stage, a.stem, b.stem, f"{rate_a:.4f}", f"{rate_b:.4f}", f"{dmg_a:.2f}", f"{dmg_b:.2f}", winner.stem])
+                f.flush()
+            alive = sorted(advancing, key=seeds.index)
+    if live:
+        os.system("cls" if os.name == "nt" else "clear")
+    print(*played, sep="\n")
+    print(f"\nChampion: {alive[0].stem}")
+
+
+def _duel_side(rc: Robocode, results: list[Result], robot: str) -> tuple[float, float]:
+    stats = rc.read_stats(robot)
+    shots = stats.get("shots", 0)
+    return (stats.get("hits", 0) / shots if shots else 0.0), _result_for(results, robot).bullet_damage
+
+
+def _latest_board(results_dir: Path) -> Path | None:
+    boards = sorted(results_dir.glob("arena_*_board.csv"))
+    return boards[-1] if boards else None
+
+
+def _seeded(files: list[Path], board: Path | None) -> list[Path]:
+    """Order of the board CSV (arena or offline); entries missing from it go last, by name."""
+    order: list[str] = []
+    if board is not None and board.is_file():
+        with board.open(newline="", encoding="utf-8") as f:
+            order = [row["entry"].removesuffix(" (no weights)") for row in csv.DictReader(f)]
+    rank = {name: i for i, name in enumerate(order)}
+    return sorted(files, key=lambda p: (rank.get(p.stem, len(rank)), p.stem))
+
+
 def _weights(cfg: Config, given: list[Path]) -> list[Path]:
     files = list(given) or sorted(cfg.submissions_dir.glob("*.txt"))
     if not files:
@@ -191,6 +257,15 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--tps", type=int, help="turns per second in live mode")
     p.add_argument("--tier", help="play the robots of this tier instead of [arena] opponents")
     p.set_defaults(handler=cmd_arena)
+
+    p = sub.add_parser("bracket", help="knockout duels between submissions, live by default")
+    p.add_argument("weights", nargs="*", type=Path, help="weights files (default: all in the submissions folder)")
+    p.add_argument("--top", type=int, default=8, help="number of seeds taken (default: 8; 0: all)")
+    p.add_argument("--seed-from", type=Path, help="board CSV giving the seed order (default: latest arena board)")
+    p.add_argument("--headless", action="store_true", help="no display, full speed")
+    p.add_argument("--rounds", type=int, help="rounds per duel")
+    p.add_argument("--tps", type=int, help="turns per second in live mode")
+    p.set_defaults(handler=cmd_bracket)
 
     p = sub.add_parser("watch", help="one live battle")
     p.add_argument("weights", type=Path)
